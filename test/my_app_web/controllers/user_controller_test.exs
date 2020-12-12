@@ -3,6 +3,7 @@ defmodule MyAppWeb.UserControllerTest do
 
   alias MyApp.Account
   alias MyApp.Account.User
+  alias Plug.Test
 
   @create_attrs %{
     email: "some email",
@@ -15,20 +16,36 @@ defmodule MyAppWeb.UserControllerTest do
     password: "some updated password"
   }
   @invalid_attrs %{email: nil, is_active: nil, password: nil}
+  @current_user_attrs %{
+    email: "some current user email",
+    is_active: true,
+    password: "some current user password"
+  }
 
   def fixture(:user) do
     {:ok, user} = Account.create_user(@create_attrs)
     user
   end
 
+  def fixture(:current_user) do
+    {:ok, current_user} = Account.create_user(@current_user_attrs)
+    current_user
+  end
+
   setup %{conn: conn} do
-    {:ok, conn: put_req_header(conn, "accept", "application/json")}
+    {:ok, conn: conn, current_user: current_user} = setup_current_user(conn)
+    {:ok, conn: put_req_header(conn, "accept", "application/json"), current_user: current_user}
   end
 
   describe "index" do
-    test "lists all users", %{conn: conn} do
+    test "lists all users", %{conn: conn, current_user: current_user} do
       conn = get(conn, Routes.user_path(conn, :index))
-      assert json_response(conn, 200)["data"] == []
+      expectated_result = %{
+        "id" => current_user.id,
+        "email" => current_user.email,
+        "is_active" => current_user.is_active
+      }
+      assert json_response(conn, 200)["data"] == [expectated_result]
     end
   end
 
@@ -87,8 +104,28 @@ defmodule MyAppWeb.UserControllerTest do
     end
   end
 
+  describe "sign in user" do
+    test "returns the user with good credentials", %{conn: conn, current_user: current_user} do
+      params = %{email: current_user.email, password: @current_user_attrs.password}
+      conn = post(conn, Routes.user_path(conn, :sign_in, params))
+      expected_response = %{"id" => current_user.id, "email" => current_user.email}
+      assert json_response(conn, 200)["data"] == %{"user" => expected_response}
+    end
+
+    test "returns errors with bad credentials", %{conn: conn} do
+      params = %{email: "non-existent email", password: ""}
+      conn = post(conn, Routes.user_path(conn, :sign_in, params))
+      assert json_response(conn, 401)["errors"] == %{"detail" => "Wrong email or password"}
+    end
+  end
+
   defp create_user(_) do
     user = fixture(:user)
     %{user: user}
+  end
+
+  defp setup_current_user(conn) do
+    current_user = fixture(:current_user)
+    {:ok, conn: Test.init_test_session(conn, current_user_id: current_user.id), current_user: current_user}
   end
 end
