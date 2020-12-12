@@ -21,5 +21,14 @@ defmodule MyApp.Account.User do
     |> cast(attrs, @fields)
     |> validate_required(@fields)
     |> unique_constraint(:email)
+    |> put_password_hash()
   end
+
+  defp put_password_hash(%Ecto.Changeset{valid?: true, changes: %{password: password}} = changeset) do
+    change(changeset, Bcrypt.add_hash(password))
+  end
+  defp put_password_hash(changeset) do
+    changeset
+  end
+
 end
