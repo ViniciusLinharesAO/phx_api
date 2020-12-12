@@ -8,6 +8,7 @@ defmodule MyApp.Account do
 
   alias MyApp.Account.User
 
+  @auth_error_msg "Wrong email or password"
   @doc """
   Returns the list of users.
 
@@ -100,5 +101,23 @@ defmodule MyApp.Account do
   """
   def change_user(%User{} = user, attrs \\ %{}) do
     User.changeset(user, attrs)
+  end
+
+  def authenticate_user(email, password) do
+    query = from(u in User, where: u.email == ^email)
+    query |> Repo.one() |> verify_password(password)
+  end
+
+  defp verify_password(nil, _) do
+    # Perform a dummy check to make user enumeration more difficult
+    Bcrypt.no_user_verify()
+    {:error, @auth_error_msg}
+  end
+  defp verify_password(user, password) do
+    if Bcrypt.verify_pass(password, user.password_hash) do
+      {:ok, user}
+    else
+      {:error, @auth_error_msg}
+    end
   end
 end
